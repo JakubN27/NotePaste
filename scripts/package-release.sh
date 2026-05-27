@@ -7,6 +7,8 @@ RELEASE_DIR="$ROOT_DIR/dist/release"
 PLUGIN_STAGING="$RELEASE_DIR/notepaste"
 PLUGIN_ZIP="$RELEASE_DIR/notepaste-obsidian-plugin-$VERSION.zip"
 COMPANION_ZIP="$RELEASE_DIR/NotePaste-Camera-$VERSION.zip"
+COMPANION_DMG="$RELEASE_DIR/NotePaste-Camera-$VERSION.dmg"
+DMG_STAGING="$RELEASE_DIR/dmg"
 
 cd "$ROOT_DIR"
 
@@ -48,11 +50,22 @@ cp "$ROOT_DIR/versions.json" "$PLUGIN_STAGING/versions.json"
   /usr/bin/ditto -c -k --norsrc --keepParent "NotePaste Camera.app" "$COMPANION_ZIP"
 )
 
+mkdir -p "$DMG_STAGING"
+/usr/bin/ditto --norsrc "$ROOT_DIR/dist/NotePaste Camera.app" "$DMG_STAGING/NotePaste Camera.app"
+ln -s /Applications "$DMG_STAGING/Applications"
+hdiutil create \
+  -volname "NotePaste Camera" \
+  -srcfolder "$DMG_STAGING" \
+  -ov \
+  -format UDZO \
+  "$COMPANION_DMG" >/dev/null
+
 (
   cd "$RELEASE_DIR"
-  shasum -a 256 "$(basename "$PLUGIN_ZIP")" "$(basename "$COMPANION_ZIP")" > checksums.txt
+  shasum -a 256 "$(basename "$PLUGIN_ZIP")" "$(basename "$COMPANION_ZIP")" "$(basename "$COMPANION_DMG")" > checksums.txt
 )
 
 echo "$PLUGIN_ZIP"
 echo "$COMPANION_ZIP"
+echo "$COMPANION_DMG"
 echo "$RELEASE_DIR/checksums.txt"

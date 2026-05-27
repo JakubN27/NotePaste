@@ -35,4 +35,5 @@ jobs:
           files: |
             dist/release/notepaste-obsidian-plugin-*.zip
             dist/release/NotePaste-Camera-*.zip
+            dist/release/NotePaste-Camera-*.dmg
             dist/release/checksums.txt

@@ -71,6 +71,7 @@ Artifacts are written to:
 ```text
 dist/release/notepaste-obsidian-plugin-<version>.zip
 dist/release/NotePaste-Camera-<version>.zip
+dist/release/NotePaste-Camera-<version>.dmg
 dist/release/checksums.txt
 ```
 

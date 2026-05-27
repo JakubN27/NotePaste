@@ -20,10 +20,11 @@ This creates:
 ```text
 dist/release/notepaste-obsidian-plugin-<version>.zip
 dist/release/NotePaste-Camera-<version>.zip
+dist/release/NotePaste-Camera-<version>.dmg
 dist/release/checksums.txt
 ```
 
-The plugin zip is for manual Obsidian installation. The companion zip contains the native macOS app plus bundled plugin files under `Contents/Resources/plugin`.
+The plugin zip is for manual Obsidian installation. The companion zip contains the native macOS app plus bundled plugin files under `Contents/Resources/plugin`. The `.dmg` is the preferred user-facing download until the app is signed and notarized.
 
 ## Manual Install
 
