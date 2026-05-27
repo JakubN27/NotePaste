@@ -46,6 +46,142 @@ struct CapturePayload {
   let contentType: String
 }
 
+struct ObsidianVault {
+  let id: String
+  let name: String
+  let url: URL
+  let isOpen: Bool
+
+  var displayName: String {
+    isOpen ? "\(name) (open)" : name
+  }
+}
+
+enum PluginInstallError: LocalizedError {
+  case missingObsidianConfig
+  case missingPluginResources
+  case notVault(URL)
+  case invalidCommunityPlugins(URL)
+
+  var errorDescription: String? {
+    switch self {
+    case .missingObsidianConfig:
+      return "Could not find Obsidian's vault registry."
+    case .missingPluginResources:
+      return "This app is missing its bundled NotePaste plugin files."
+    case .notVault(let url):
+      return "\(url.path) does not look like an Obsidian vault."
+    case .invalidCommunityPlugins(let url):
+      return "Could not read \(url.path) as an Obsidian community plugin list."
+    }
+  }
+}
+
+final class PluginInstaller {
+  private let fileManager = FileManager.default
+  private let pluginID = "notepaste"
+  private let bundledFiles = ["manifest.json", "main.js", "styles.css", "versions.json"]
+
+  func discoverVaults() throws -> [ObsidianVault] {
+    let configURL = try obsidianConfigURL()
+    let data = try Data(contentsOf: configURL)
+    guard
+      let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let vaults = root["vaults"] as? [String: Any]
+    else {
+      throw PluginInstallError.missingObsidianConfig
+    }
+
+    return vaults.compactMap { id, value in
+      guard
+        let vault = value as? [String: Any],
+        let path = vault["path"] as? String
+      else {
+        return nil
+      }
+
+      let url = URL(fileURLWithPath: path)
+      return ObsidianVault(
+        id: id,
+        name: url.lastPathComponent,
+        url: url,
+        isOpen: (vault["open"] as? Bool) ?? false
+      )
+    }
+    .sorted { lhs, rhs in
+      if lhs.isOpen != rhs.isOpen {
+        return lhs.isOpen && !rhs.isOpen
+      }
+      return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+  }
+
+  func install(into vault: ObsidianVault) throws {
+    let obsidianDirectory = vault.url.appendingPathComponent(".obsidian", isDirectory: true)
+    guard fileManager.fileExists(atPath: obsidianDirectory.path) else {
+      throw PluginInstallError.notVault(vault.url)
+    }
+
+    let resources = try pluginResourcesURL()
+    let targetDirectory = obsidianDirectory
+      .appendingPathComponent("plugins", isDirectory: true)
+      .appendingPathComponent(pluginID, isDirectory: true)
+
+    try fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+    for fileName in bundledFiles {
+      let source = resources.appendingPathComponent(fileName, isDirectory: false)
+      let destination = targetDirectory.appendingPathComponent(fileName, isDirectory: false)
+      guard fileManager.fileExists(atPath: source.path) else {
+        throw PluginInstallError.missingPluginResources
+      }
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      try fileManager.copyItem(at: source, to: destination)
+    }
+
+    try enableCommunityPlugin(in: obsidianDirectory)
+  }
+
+  private func obsidianConfigURL() throws -> URL {
+    guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      throw PluginInstallError.missingObsidianConfig
+    }
+    return appSupport
+      .appendingPathComponent("obsidian", isDirectory: true)
+      .appendingPathComponent("obsidian.json", isDirectory: false)
+  }
+
+  private func pluginResourcesURL() throws -> URL {
+    guard let resources = Bundle.main.resourceURL?.appendingPathComponent("plugin", isDirectory: true),
+          fileManager.fileExists(atPath: resources.path)
+    else {
+      throw PluginInstallError.missingPluginResources
+    }
+    return resources
+  }
+
+  private func enableCommunityPlugin(in obsidianDirectory: URL) throws {
+    let pluginsURL = obsidianDirectory.appendingPathComponent("community-plugins.json", isDirectory: false)
+    var plugins: [String] = []
+
+    if fileManager.fileExists(atPath: pluginsURL.path) {
+      let data = try Data(contentsOf: pluginsURL)
+      guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String] else {
+        throw PluginInstallError.invalidCommunityPlugins(pluginsURL)
+      }
+      plugins = parsed
+    }
+
+    if !plugins.contains(pluginID) {
+      plugins.append(pluginID)
+    }
+
+    let data = try JSONSerialization.data(withJSONObject: plugins, options: [.prettyPrinted])
+    try data.appendingNewline().write(to: pluginsURL, options: .atomic)
+  }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var windowController: CameraWindowController?
@@ -125,13 +261,17 @@ final class CameraWindowController: NSWindowController {
   private let cameraView: ContinuityCameraView
   private let statusLabel = NSTextField(labelWithString: "")
   private let request: CaptureRequest?
+  private let pluginInstaller = PluginInstaller()
+  private var vaults: [ObsidianVault] = []
+  private let vaultPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+  private let installButton = NSButton(title: "Install / Update Plugin", target: nil, action: nil)
 
   init(request: CaptureRequest?, initialStatus: String) {
     self.request = request
     self.cameraView = ContinuityCameraView(request: request)
 
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 440, height: 240),
+      contentRect: NSRect(x: 0, y: 0, width: 560, height: request == nil ? 300 : 240),
       styleMask: [.titled, .closable, .miniaturizable],
       backing: .buffered,
       defer: false
@@ -154,20 +294,21 @@ final class CameraWindowController: NSWindowController {
     let title = NSTextField(labelWithString: "NotePaste Camera")
     title.font = .systemFont(ofSize: 18, weight: .semibold)
 
-    let body = NSTextField(labelWithString: "Use the system iPhone camera menu. Captured images are sent back to the active Obsidian note.")
+    let bodyText = request == nil
+      ? "Install the Obsidian plugin into a vault, then use /notepaste from Obsidian. This app also handles iPhone camera capture."
+      : "Use the system iPhone camera menu. Captured images are sent back to the active Obsidian note."
+    let body = NSTextField(labelWithString: bodyText)
     body.lineBreakMode = .byWordWrapping
     body.maximumNumberOfLines = 3
     body.textColor = .secondaryLabelColor
-
-    let button = NSButton(title: "Use iPhone Camera", target: cameraView, action: #selector(ContinuityCameraView.showContinuityCameraMenu))
-    button.bezelStyle = .rounded
 
     statusLabel.stringValue = initialStatus
     statusLabel.textColor = .secondaryLabelColor
     statusLabel.lineBreakMode = .byWordWrapping
     statusLabel.maximumNumberOfLines = 2
 
-    let stack = NSStackView(views: [title, body, button, statusLabel])
+    let controls = request == nil ? installerControls() : cameraControls()
+    let stack = NSStackView(views: [title, body, controls, statusLabel])
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 14
@@ -182,9 +323,12 @@ final class CameraWindowController: NSWindowController {
       stack.leadingAnchor.constraint(equalTo: cameraView.leadingAnchor, constant: 24),
       stack.trailingAnchor.constraint(equalTo: cameraView.trailingAnchor, constant: -24),
       stack.topAnchor.constraint(equalTo: cameraView.topAnchor, constant: 24),
-      stack.bottomAnchor.constraint(lessThanOrEqualTo: cameraView.bottomAnchor, constant: -24),
-      button.widthAnchor.constraint(greaterThanOrEqualToConstant: 160)
+      stack.bottomAnchor.constraint(lessThanOrEqualTo: cameraView.bottomAnchor, constant: -24)
     ])
+
+    if request == nil {
+      reloadVaultList()
+    }
   }
 
   required init?(coder: NSCoder) {
@@ -203,6 +347,67 @@ final class CameraWindowController: NSWindowController {
   func presentContinuityCameraMenuSoon() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
       self?.cameraView.showContinuityCameraMenu()
+    }
+  }
+
+  private func cameraControls() -> NSView {
+    let button = NSButton(title: "Use iPhone Camera", target: cameraView, action: #selector(ContinuityCameraView.showContinuityCameraMenu))
+    button.bezelStyle = .rounded
+    button.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+    return button
+  }
+
+  private func installerControls() -> NSView {
+    vaultPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+
+    installButton.target = self
+    installButton.action = #selector(installSelectedVault)
+    installButton.bezelStyle = .rounded
+
+    let refreshButton = NSButton(title: "Refresh Vaults", target: self, action: #selector(refreshVaultList))
+    refreshButton.bezelStyle = .rounded
+
+    let stack = NSStackView(views: [vaultPopup, installButton, refreshButton])
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.spacing = 10
+    return stack
+  }
+
+  @objc private func refreshVaultList() {
+    reloadVaultList()
+  }
+
+  @objc private func installSelectedVault() {
+    let index = vaultPopup.indexOfSelectedItem
+    guard vaults.indices.contains(index) else {
+      statusLabel.stringValue = "Choose an Obsidian vault first."
+      return
+    }
+
+    let vault = vaults[index]
+    do {
+      try pluginInstaller.install(into: vault)
+      statusLabel.stringValue = "Installed NotePaste into \(vault.name). Reload Obsidian if it was already open."
+    } catch {
+      statusLabel.stringValue = "Install failed: \(error.localizedDescription)"
+    }
+  }
+
+  private func reloadVaultList() {
+    do {
+      vaults = try pluginInstaller.discoverVaults()
+      vaultPopup.removeAllItems()
+      vaultPopup.addItems(withTitles: vaults.map { "\($0.displayName) - \($0.url.path)" })
+      installButton.isEnabled = !vaults.isEmpty
+      statusLabel.stringValue = vaults.isEmpty
+        ? "No Obsidian vaults were found."
+        : "Choose a vault to install or update the bundled plugin."
+    } catch {
+      vaults = []
+      vaultPopup.removeAllItems()
+      installButton.isEnabled = false
+      statusLabel.stringValue = "Could not discover vaults: \(error.localizedDescription)"
     }
   }
 }
@@ -418,5 +623,13 @@ extension NSImage {
       return nil
     }
     return bitmap.representation(using: .jpeg, properties: [.compressionFactor: compression])
+  }
+}
+
+extension Data {
+  func appendingNewline() -> Data {
+    var copy = self
+    copy.append(0x0A)
+    return copy
   }
 }
