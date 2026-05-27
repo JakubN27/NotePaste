@@ -1,0 +1,9 @@
+{
+  "id": "notepaste",
+  "name": "NotePaste",
+  "version": "0.1.0",
+  "minAppVersion": "1.6.0",
+  "description": "Insert iPhone-captured images directly into the active note via a local upload receiver.",
+  "author": "Jakub Nosek",
+  "isDesktopOnly": true
+}

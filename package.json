@@ -1,0 +1,32 @@
+{
+  "name": "notepaste",
+  "version": "0.1.0",
+  "description": "Desktop-only Obsidian plugin for inserting iPhone-captured images into the active note.",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf main.js dist companion/.build",
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "build:companion": "scripts/build-companion.sh",
+    "build:all": "npm run build && npm run build:companion",
+    "package:release": "scripts/package-release.sh",
+    "install:vault": "scripts/install-to-vault.sh",
+    "test": "tsx --test test/**/*.test.ts"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "notepaste"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "esbuild": "0.25.5",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "obsidian": "1.12.3"
+  }
+}

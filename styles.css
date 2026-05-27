@@ -1,0 +1,30 @@
+.notepaste-status {
+  font-size: 0.95em;
+  color: var(--text-muted);
+}
+
+.notepaste-code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.notepaste-actions {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.notepaste-fallback {
+  margin-top: 16px;
+}
+
+.notepaste-fallback summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
