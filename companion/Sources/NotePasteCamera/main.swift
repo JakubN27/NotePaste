@@ -534,12 +534,9 @@ final class ContinuityCameraView: NSView {
       return
     }
 
-    statusHandler?("Choose Take Photo in the system iPhone menu.")
+    statusHandler?("Choose your iPhone from the system menu.")
     hasHandledCapture = false
     let menu = NSMenu(title: "Continuity Camera")
-    let importItem = NSMenuItem(title: "Take Photo on iPhone", action: nil, keyEquivalent: "")
-    importItem.identifier = NSMenuItem.importFromDeviceIdentifier
-    menu.addItem(importItem)
     NSMenu.popUpContextMenu(menu, with: event, for: self)
   }
 

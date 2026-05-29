@@ -4,7 +4,7 @@
 
 - Improved the Obsidian capture modal and close it automatically after a successful insert.
 - Improved the macOS companion capture UI.
-- Use AppKit's official Continuity Camera import menu item for the primary iPhone photo action.
+- Keep the working AppKit-generated Continuity Camera menu path for the primary iPhone photo action.
 
 ## 0.1.0
 
