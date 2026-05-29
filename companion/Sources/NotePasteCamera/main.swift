@@ -226,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func startCapture(_ request: CaptureRequest) {
-    showWindow(request: request, status: "Opening iPhone camera options...")
+    showWindow(request: request, status: "Opening the iPhone photo capture menu...")
     windowController?.presentContinuityCameraMenuSoon()
   }
 
@@ -265,13 +265,14 @@ final class CameraWindowController: NSWindowController {
   private var vaults: [ObsidianVault] = []
   private let vaultPopup = NSPopUpButton(frame: .zero, pullsDown: false)
   private let installButton = NSButton(title: "Install / Update Plugin", target: nil, action: nil)
+  private let primaryButton = NSButton(title: "", target: nil, action: nil)
 
   init(request: CaptureRequest?, initialStatus: String) {
     self.request = request
     self.cameraView = ContinuityCameraView(request: request)
 
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 560, height: request == nil ? 300 : 240),
+      contentRect: NSRect(x: 0, y: 0, width: 620, height: request == nil ? 330 : 270),
       styleMask: [.titled, .closable, .miniaturizable],
       backing: .buffered,
       defer: false
@@ -291,12 +292,20 @@ final class CameraWindowController: NSWindowController {
       self?.window?.close()
     }
 
-    let title = NSTextField(labelWithString: "NotePaste Camera")
-    title.font = .systemFont(ofSize: 18, weight: .semibold)
+    cameraView.wantsLayer = true
+    cameraView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
+    let eyebrow = NSTextField(labelWithString: request == nil ? "Vault setup" : "Capture ready")
+    eyebrow.font = .systemFont(ofSize: 11, weight: .bold)
+    eyebrow.textColor = .controlAccentColor
+    eyebrow.stringValue = eyebrow.stringValue.uppercased()
+
+    let title = NSTextField(labelWithString: request == nil ? "Install NotePaste" : "Take a photo on iPhone")
+    title.font = .systemFont(ofSize: 24, weight: .bold)
 
     let bodyText = request == nil
       ? "Install the Obsidian plugin into a vault, then use /notepaste from Obsidian. This app also handles iPhone camera capture."
-      : "Use the system iPhone camera menu. Captured images are sent back to the active Obsidian note."
+      : "The system iPhone camera menu opens automatically. Captured images are sent back to the active Obsidian note and this window closes."
     let body = NSTextField(labelWithString: bodyText)
     body.lineBreakMode = .byWordWrapping
     body.maximumNumberOfLines = 3
@@ -308,7 +317,7 @@ final class CameraWindowController: NSWindowController {
     statusLabel.maximumNumberOfLines = 2
 
     let controls = request == nil ? installerControls() : cameraControls()
-    let stack = NSStackView(views: [title, body, controls, statusLabel])
+    let stack = NSStackView(views: [eyebrow, title, body, controls, statusLabel])
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 14
@@ -351,25 +360,46 @@ final class CameraWindowController: NSWindowController {
   }
 
   private func cameraControls() -> NSView {
-    let button = NSButton(title: "Use iPhone Camera", target: cameraView, action: #selector(ContinuityCameraView.showContinuityCameraMenu))
-    button.bezelStyle = .rounded
-    button.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
-    return button
+    primaryButton.title = "Take Photo on iPhone"
+    primaryButton.target = cameraView
+    primaryButton.action = #selector(ContinuityCameraView.showContinuityCameraMenu)
+    primaryButton.bezelStyle = .rounded
+    primaryButton.controlSize = .large
+    primaryButton.keyEquivalent = "\r"
+    primaryButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 190).isActive = true
+
+    let caption = NSTextField(labelWithString: "If macOS shows a device list, choose Take Photo. Apple does not expose a public API to bypass that system confirmation.")
+    caption.textColor = .tertiaryLabelColor
+    caption.font = .systemFont(ofSize: 12)
+    caption.lineBreakMode = .byWordWrapping
+    caption.maximumNumberOfLines = 2
+
+    let stack = NSStackView(views: [primaryButton, caption])
+    stack.orientation = .vertical
+    stack.alignment = .leading
+    stack.spacing = 8
+    return stack
   }
 
   private func installerControls() -> NSView {
-    vaultPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 360).isActive = true
+    vaultPopup.widthAnchor.constraint(greaterThanOrEqualToConstant: 420).isActive = true
 
     installButton.target = self
     installButton.action = #selector(installSelectedVault)
     installButton.bezelStyle = .rounded
+    installButton.controlSize = .large
 
     let refreshButton = NSButton(title: "Refresh Vaults", target: self, action: #selector(refreshVaultList))
     refreshButton.bezelStyle = .rounded
 
-    let stack = NSStackView(views: [vaultPopup, installButton, refreshButton])
-    stack.orientation = .horizontal
-    stack.alignment = .centerY
+    let buttonRow = NSStackView(views: [installButton, refreshButton])
+    buttonRow.orientation = .horizontal
+    buttonRow.alignment = .centerY
+    buttonRow.spacing = 10
+
+    let stack = NSStackView(views: [vaultPopup, buttonRow])
+    stack.orientation = .vertical
+    stack.alignment = .leading
     stack.spacing = 10
     return stack
   }
@@ -504,9 +534,12 @@ final class ContinuityCameraView: NSView {
       return
     }
 
-    statusHandler?("Choose your iPhone from the system menu.")
+    statusHandler?("Choose Take Photo in the system iPhone menu.")
     hasHandledCapture = false
     let menu = NSMenu(title: "Continuity Camera")
+    let importItem = NSMenuItem(title: "Take Photo on iPhone", action: nil, keyEquivalent: "")
+    importItem.identifier = NSMenuItem.importFromDeviceIdentifier
+    menu.addItem(importItem)
     NSMenu.popUpContextMenu(menu, with: event, for: self)
   }
 

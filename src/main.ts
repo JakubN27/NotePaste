@@ -19,6 +19,7 @@ export default class NotePastePlugin extends Plugin implements ReceiverDelegate 
 
   private receiver: NotePasteReceiver | null = null;
   private activeSession: CaptureSession | null = null;
+  private captureStatusModal: CaptureStatusModal | null = null;
   private sessionTimeoutHandle: number | null = null;
   private suppressEditorTrigger = false;
 
@@ -198,7 +199,9 @@ export default class NotePastePlugin extends Plugin implements ReceiverDelegate 
     };
     this.armSessionTimeout(this.activeSession);
 
-    new CaptureStatusModal(this, this.activeSession).open();
+    this.closeCaptureStatusModal();
+    this.captureStatusModal = new CaptureStatusModal(this, this.activeSession);
+    this.captureStatusModal.open();
     await this.launchCompanion(this.activeSession);
   }
 
@@ -226,6 +229,7 @@ export default class NotePastePlugin extends Plugin implements ReceiverDelegate 
     }
 
     this.clearActiveSession(session.id);
+    this.closeCaptureStatusModal(session.id);
   }
 
   private async storeAttachment(session: CaptureSession, capture: IncomingCapture): Promise<{ attachmentPath: string; file: TFile }> {
@@ -278,6 +282,17 @@ export default class NotePastePlugin extends Plugin implements ReceiverDelegate 
     }
     this.clearActiveSession(session.id);
     return true;
+  }
+
+  private closeCaptureStatusModal(sessionId?: string): void {
+    if (!this.captureStatusModal) {
+      return;
+    }
+    if (sessionId && this.captureStatusModal.session.id !== sessionId) {
+      return;
+    }
+    this.captureStatusModal.close();
+    this.captureStatusModal = null;
   }
 
   buildCaptureUrl(): string {
@@ -370,27 +385,35 @@ async function openExternalURL(url: string): Promise<boolean> {
 }
 
 class CaptureStatusModal extends Modal {
-  constructor(private readonly plugin: NotePastePlugin, private readonly session: CaptureSession) {
+  constructor(private readonly plugin: NotePastePlugin, readonly session: CaptureSession) {
     super(plugin.app);
   }
 
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.createEl("h2", { text: "Opening iPhone camera" });
-    contentEl.createEl("p", {
-      text: "Choose your iPhone in the NotePaste Camera window. After you take the photo, it will appear in the current note automatically.",
-    });
-    contentEl.createEl("p", {
-      cls: "notepaste-status",
-      text: "This window can stay open while the native camera flow completes.",
+    contentEl.addClass("notepaste-capture-modal");
+
+    const hero = contentEl.createDiv({ cls: "notepaste-hero" });
+    hero.createDiv({ cls: "notepaste-kicker", text: "NotePaste is listening" });
+    hero.createEl("h2", { text: "Take the photo on your iPhone" });
+    hero.createEl("p", {
+      text: "The native camera window should open automatically. Once the photo is accepted, this popup closes and the image appears in this note.",
     });
 
     const buttonRow = contentEl.createDiv({ cls: "notepaste-actions" });
-    const openButton = buttonRow.createEl("button", { text: "Open Camera Again" });
+    const openButton = buttonRow.createEl("button", {
+      cls: "mod-cta",
+      text: "Reopen iPhone Camera",
+    });
     openButton.addEventListener("click", () => {
       void this.plugin.launchCompanion(this.session);
     });
+
+    const stepList = contentEl.createDiv({ cls: "notepaste-steps" });
+    stepList.createDiv({ text: "1. Choose Take Photo if macOS shows the device menu." });
+    stepList.createDiv({ text: "2. Tap Use Photo on your iPhone." });
+    stepList.createDiv({ text: "3. NotePaste inserts the image here and closes this popup." });
 
     const fallback = contentEl.createEl("details", { cls: "notepaste-fallback" });
     fallback.createEl("summary", { text: "Fallback upload details" });

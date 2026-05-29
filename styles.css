@@ -1,3 +1,33 @@
+.notepaste-capture-modal {
+  max-width: 640px;
+}
+
+.notepaste-hero {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  padding: 18px 20px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(82, 160, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, var(--background-secondary), var(--background-primary));
+}
+
+.notepaste-hero h2 {
+  margin: 4px 0 8px;
+}
+
+.notepaste-hero p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.notepaste-kicker {
+  color: var(--text-accent);
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .notepaste-status {
   font-size: 0.95em;
   color: var(--text-muted);
@@ -18,6 +48,19 @@
   display: flex;
   gap: 8px;
   margin: 16px 0;
+}
+
+.notepaste-steps {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 4px;
+  color: var(--text-muted);
+  font-size: 0.95em;
+}
+
+.notepaste-steps div {
+  border-left: 2px solid var(--text-accent);
+  padding-left: 10px;
 }
 
 .notepaste-fallback {
